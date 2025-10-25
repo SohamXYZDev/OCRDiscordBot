@@ -1,0 +1,19 @@
+{
+  "name": "ocr-discord-bot",
+  "version": "1.0.0",
+  "description": "OCR program to extract information from sports betting images",
+  "main": "ocr.js",
+  "type": "module",
+  "scripts": {
+    "start": "node ocr.js",
+    "ocr": "node ocr.js"
+  },
+  "keywords": ["ocr", "tesseract", "image-processing"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "tesseract.js": "^5.1.1",
+    "sharp": "^0.33.5",
+    "glob": "^11.0.0"
+  }
+}
