@@ -23,6 +23,12 @@ const OUTPUT_DIR = join(__dirname, 'output');
 function cleanOCRText(text) {
     let cleaned = text;
     
+    // Remove "®" characters at the start of lines (including multiple quotes)
+    cleaned = cleaned.replace(/^["']*®+\s*/gm, '');
+    
+    // Remove single "O" followed by space at the start of lines (often before player names)
+    cleaned = cleaned.replace(/^O\s+/gm, '');
+    
     // Remove ALL icon prefixes at start of lines (team icons, bullets, etc.)
     cleaned = cleaned.replace(/^['"]?[®@©•o◉●○◯▪▫■□◆◇★☆►▶▸‣⁃∙∘⚬⦿⦾⊙⊚⊛⊜⊝⚫⚪🔴🔵🟢🟡🟠🟣⚽🏈🏀⛹️‍♂️\.]+\s*/gm, '');
     cleaned = cleaned.replace(/^(ee|Co|Ca|SEN|Ces|BE\.|So|2\.|J|e|a|o|OO|>\s*|"Y\s*|IN|Pe|A)\s+/gm, '');
@@ -271,6 +277,159 @@ function parseExtractedData(ocrData) {
 }
 
 /**
+ * Structure betting slip data into organized sections
+ */
+function structureBettingSlip(text) {
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    
+    let structured = {
+        gameInfo: '',
+        odds: '',
+        slipInfo: '',
+        legs: [],
+        wager: '',
+        payout: '',
+        extra: []
+    };
+    
+    let currentSection = 'unknown';
+    let legCounter = 0;
+    
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const nextLine = i < lines.length - 1 ? lines[i + 1] : '';
+        
+        // Detect odds (usually +XXXX or -XXXX at top)
+        if (/^[+-]\d{3,5}$/.test(line)) {
+            structured.odds = line;
+            continue;
+        }
+        
+        // Detect game info (teams with @)
+        if (line.includes('@') && /\d{1,2}:\d{2}[AP]M/.test(line)) {
+            structured.gameInfo = line;
+            continue;
+        }
+        
+        // Detect slip type and token
+        if (/Same Game Parlay|Parlay|Straight Bet/i.test(line)) {
+            let slipParts = [line];
+            if (/NO SWEAT TOKEN/i.test(nextLine)) {
+                slipParts.push(lines[i + 1]);
+                i++;
+            }
+            structured.slipInfo = slipParts.join(' | ');
+            currentSection = 'legs';
+            continue;
+        }
+        
+        // Detect wager
+        if (/TOTAL WAGER/i.test(line) || (/^\$[\d,]+\.?\d*$/.test(line) && currentSection === 'legs')) {
+            if (/TOTAL WAGER/i.test(line)) {
+                // Extract amount from next line or same line
+                const wagerMatch = line.match(/\$[\d,]+\.?\d*/);
+                if (wagerMatch) {
+                    structured.wager = wagerMatch[0];
+                } else if (nextLine && /^\$[\d,]+\.?\d*$/.test(nextLine)) {
+                    structured.wager = lines[i + 1];
+                    i++;
+                }
+            } else {
+                structured.wager = line;
+            }
+            currentSection = 'payout';
+            continue;
+        }
+        
+        // Detect payout
+        if (/TOTAL PAYOUT|TOTAL.*PAYOUT/i.test(line) || (/^\$[\d,]+\.?\d*$/.test(line) && currentSection === 'payout')) {
+            if (/TOTAL PAYOUT/i.test(line)) {
+                const payoutMatch = line.match(/\$[\d,]+\.?\d*/);
+                if (payoutMatch) {
+                    structured.payout = payoutMatch[0];
+                } else if (nextLine && /^\$[\d,]+\.?\d*$/.test(nextLine)) {
+                    structured.payout = lines[i + 1];
+                    i++;
+                }
+            } else {
+                structured.payout = line;
+            }
+            currentSection = 'extra';
+            continue;
+        }
+        
+        // Parse individual legs (player props)
+        if (currentSection === 'legs') {
+            // Check if this looks like a bet leg
+            if (/Over|Under|OVER|UNDER|\+|-\d+/i.test(line) || /MONEYLINE|SPREAD|TOUCHDOWN|RECEPTIONS|PASSING|RUSHING|RECEIVING/i.test(line)) {
+                // Try to parse player name and bet type
+                let betLine = line;
+                
+                // Check if next line is a subtitle (like "RECEIVING YDS")
+                if (i < lines.length - 1 && /^[A-Z\s]+(YDS|TDS|RECEPTIONS|TOUCHDOWNS|POINTS|ASSISTS)$/i.test(nextLine)) {
+                    betLine += ' - ' + nextLine;
+                    i++;
+                }
+                
+                // Format the leg
+                legCounter++;
+                structured.legs.push(`${legCounter}. ${betLine}`);
+                continue;
+            }
+        }
+        
+        // Extra info
+        if (currentSection === 'extra' || currentSection === 'unknown') {
+            structured.extra.push(line);
+        }
+    }
+    
+    // Build formatted output
+    let output = [];
+    
+    if (structured.gameInfo) {
+        output.push('Game Info');
+        output.push(structured.gameInfo);
+        output.push('');
+    }
+    
+    if (structured.odds) {
+        output.push('Odds');
+        output.push(structured.odds);
+        output.push('');
+    }
+    
+    if (structured.slipInfo) {
+        output.push('Slip Info');
+        output.push(structured.slipInfo);
+        output.push('');
+    }
+    
+    if (structured.legs.length > 0) {
+        output.push('Individual Legs');
+        structured.legs.forEach(leg => {
+            output.push(leg);
+            output.push(''); // Add blank line after each leg
+        });
+    }
+    
+    if (structured.wager || structured.payout) {
+        const wagePay = [];
+        if (structured.wager) wagePay.push(`Total Wager: ${structured.wager}`);
+        if (structured.payout) wagePay.push(`Total Payout: ${structured.payout}`);
+        output.push(wagePay.join(' | '));
+        output.push('');
+    }
+    
+    if (structured.extra.length > 0) {
+        output.push('Additional Info');
+        output.push(...structured.extra);
+    }
+    
+    return output.join('\n').trim();
+}
+
+/**
  * Extract betting slip information specifically
  */
 function extractBettingInfo(structuredData) {
@@ -373,6 +532,9 @@ function saveResults(imageName, structuredData, bettingInfo) {
     
     const baseName = imageName.replace(/\.[^.]+$/, '');
     
+    // Create structured text output
+    const structuredText = structureBettingSlip(structuredData.rawText);
+    
     // Save complete data as JSON
     const completeData = {
         imageName: imageName,
@@ -385,10 +547,10 @@ function saveResults(imageName, structuredData, bettingInfo) {
     fs.writeFileSync(jsonOutput, JSON.stringify(completeData, null, 2));
     console.log(`💾 Complete data saved to: ${jsonOutput}`);
     
-    // Save readable text version
+    // Save structured text version
     const textOutput = join(OUTPUT_DIR, `${baseName}_ocr.txt`);
-    fs.writeFileSync(textOutput, structuredData.rawText);
-    console.log(`📝 Raw text saved to: ${textOutput}`);
+    fs.writeFileSync(textOutput, structuredText);
+    console.log(`📝 Structured text saved to: ${textOutput}`);
     
     return jsonOutput;
 }
@@ -401,7 +563,13 @@ function displayResults(imageName, structuredData, bettingInfo) {
     console.log(`📊 OCR RESULTS - ${imageName}`);
     console.log('='.repeat(60));
     
-    console.log('\n🎯 BETTING INFORMATION:');
+    // Display structured betting slip
+    const structuredText = structureBettingSlip(structuredData.rawText);
+    console.log('\n📝 STRUCTURED OUTPUT:');
+    console.log(structuredText);
+    
+    console.log('\n' + '='.repeat(60));
+    console.log('🎯 BETTING INFORMATION (Legacy Format):');
     
     if (bettingInfo.parlayOdds) {
         console.log(`   Parlay Odds: ${bettingInfo.parlayOdds}`);
