@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, AttachmentBuilder } from 'discord.js';
+import { SlashCommandBuilder, AttachmentBuilder, EmbedBuilder } from 'discord.js';
 import Tesseract from 'tesseract.js';
 import sharp from 'sharp';
 import { fileURLToPath } from 'url';
@@ -359,7 +359,11 @@ function structureBettingSlip(text) {
         output.push(...structured.extra);
     }
     
-    return output.join('\n').trim();
+    // Return both structured object and formatted text
+    return {
+        structured: structured,
+        text: output.join('\n').trim()
+    };
 }
 
 export default {
@@ -426,44 +430,104 @@ export default {
             const result = parseExtractedData(ocrData);
             
             // Structure the betting slip
-            const structuredText = structureBettingSlip(result.cleanedText);
+            const structuredData = structureBettingSlip(result.cleanedText);
+            const data = structuredData.structured;
             
-            // Create result message
-            const resultMessage = `✅ **OCR Complete!**\n\n` +
-                `📊 **Statistics:**\n` +
-                `• Confidence: ${result.confidence.toFixed(2)}%\n` +
-                `• Words detected: ${result.wordCount}\n\n` +
-                `📝 **Extracted Text:**\n` +
-                `\`\`\`\n${structuredText}\`\`\``;
+            // Create embed
+            const embed = new EmbedBuilder()
+                .setColor(0x00FF00)
+                .setTitle('🎰 Betting Slip OCR Results')
+                .setTimestamp();
             
-            // Check if message is too long for Discord (2000 char limit)
-            if (resultMessage.length > 1900) {
-                // Create a text file with the results
-                const resultFilePath = join(tempDir, `ocr_result_${timestamp}.txt`);
-                fs.writeFileSync(resultFilePath, structuredText, 'utf8');
-                
-                const resultFile = new AttachmentBuilder(resultFilePath);
-                
-                await interaction.editReply({
-                    content: `✅ **OCR Complete!**\n\n` +
-                        `📊 **Statistics:**\n` +
-                        `• Confidence: ${result.confidence.toFixed(2)}%\n` +
-                        `• Words detected: ${result.wordCount}\n\n` +
-                        `📝 Text was too long, see attached file.`,
-                    files: [resultFile]
+            // Add Game Info field
+            if (data.gameInfo) {
+                embed.addFields({
+                    name: '🏈 Game Info',
+                    value: data.gameInfo,
+                    inline: false
                 });
-                
-                // Clean up result file after a delay
-                setTimeout(() => {
-                    try {
-                        fs.unlinkSync(resultFilePath);
-                    } catch (e) {
-                        console.error('Error deleting result file:', e);
-                    }
-                }, 5000);
-            } else {
-                await interaction.editReply(resultMessage);
             }
+            
+            // Add Odds field
+            if (data.odds) {
+                embed.addFields({
+                    name: '📊 Odds',
+                    value: data.odds,
+                    inline: true
+                });
+            }
+            
+            // Add Slip Info field
+            if (data.slipInfo) {
+                embed.addFields({
+                    name: '🎟️ Slip Info',
+                    value: data.slipInfo,
+                    inline: false
+                });
+            }
+            
+            // Add Individual Legs field
+            if (data.legs.length > 0) {
+                const legsText = data.legs.join('\n\n');
+                
+                // Discord field value limit is 1024 characters
+                if (legsText.length > 1024) {
+                    // Split into multiple fields if too long
+                    const midpoint = Math.ceil(data.legs.length / 2);
+                    const firstHalf = data.legs.slice(0, midpoint).join('\n\n');
+                    const secondHalf = data.legs.slice(midpoint).join('\n\n');
+                    
+                    embed.addFields({
+                        name: '📋 Individual Legs (Part 1)',
+                        value: firstHalf,
+                        inline: false
+                    });
+                    
+                    embed.addFields({
+                        name: '📋 Individual Legs (Part 2)',
+                        value: secondHalf,
+                        inline: false
+                    });
+                } else {
+                    embed.addFields({
+                        name: '📋 Individual Legs',
+                        value: legsText,
+                        inline: false
+                    });
+                }
+            }
+            
+            // Add Wager/Payout field
+            if (data.wager || data.payout) {
+                const wagerPayoutText = [];
+                if (data.wager) wagerPayoutText.push(`💵 Total Wager: **${data.wager}**`);
+                if (data.payout) wagerPayoutText.push(`💰 Total Payout: **${data.payout}**`);
+                
+                embed.addFields({
+                    name: '💸 Wager & Payout',
+                    value: wagerPayoutText.join('\n'),
+                    inline: false
+                });
+            }
+            
+            // Add Extra Info field if present
+            if (data.extra.length > 0) {
+                embed.addFields({
+                    name: 'ℹ️ Additional Info',
+                    value: data.extra.join('\n'),
+                    inline: false
+                });
+            }
+            
+            // Add footer with stats
+            embed.setFooter({
+                text: `Confidence: ${result.confidence.toFixed(1)}% | Words: ${result.wordCount}`
+            });
+            
+            // Send embed
+            await interaction.editReply({
+                embeds: [embed]
+            });
             
         } catch (error) {
             console.error('OCR Error:', error);

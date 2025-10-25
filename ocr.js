@@ -426,7 +426,11 @@ function structureBettingSlip(text) {
         output.push(...structured.extra);
     }
     
-    return output.join('\n').trim();
+    // Return both structured object and formatted text
+    return {
+        structured: structured,
+        text: output.join('\n').trim()
+    };
 }
 
 /**
@@ -533,7 +537,8 @@ function saveResults(imageName, structuredData, bettingInfo) {
     const baseName = imageName.replace(/\.[^.]+$/, '');
     
     // Create structured text output
-    const structuredText = structureBettingSlip(structuredData.rawText);
+    const structuredOutput = structureBettingSlip(structuredData.rawText);
+    const structuredText = structuredOutput.text;
     
     // Save complete data as JSON
     const completeData = {
@@ -564,9 +569,9 @@ function displayResults(imageName, structuredData, bettingInfo) {
     console.log('='.repeat(60));
     
     // Display structured betting slip
-    const structuredText = structureBettingSlip(structuredData.rawText);
+    const structuredOutput = structureBettingSlip(structuredData.rawText);
     console.log('\n📝 STRUCTURED OUTPUT:');
-    console.log(structuredText);
+    console.log(structuredOutput.text);
     
     console.log('\n' + '='.repeat(60));
     console.log('🎯 BETTING INFORMATION (Legacy Format):');
