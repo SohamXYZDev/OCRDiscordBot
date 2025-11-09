@@ -16,6 +16,12 @@ const __dirname = dirname(__filename);
 function cleanOCRText(text) {
     let cleaned = text;
     
+    // Remove all currency and special symbols that appear as artifacts
+    cleaned = cleaned.replace(/[¥§£¤¢₹₽€]/g, '');  // Remove currency symbols
+    cleaned = cleaned.replace(/[_\-]{2,}/g, ' ');  // Remove multiple underscores/dashes
+    cleaned = cleaned.replace(/^\s*[_\-]+\s*/gm, '');  // Remove leading underscores/dashes
+    cleaned = cleaned.replace(/\s+[_\-]+\s+/g, ' ');  // Remove underscores/dashes surrounded by spaces
+    
     // Dark mode OCR cleaning (for inverted images)
     // Remove leading junk characters that appear in dark mode OCR
     cleaned = cleaned.replace(/^[ZT]+\s+/gm, '');
@@ -52,6 +58,8 @@ function cleanOCRText(text) {
     // Remove icon symbols at start of lines (team icons, betting icons, etc.)
     cleaned = cleaned.replace(/^[&]+\s+/gm, '');
     cleaned = cleaned.replace(/^X\s+/gm, '');  // Remove checkbox symbols
+    cleaned = cleaned.replace(/^[\+>]+\s+[@¥§]+\s+/gm, '');  // Remove "+ @" or ">¥" patterns
+    cleaned = cleaned.replace(/\s+[@¥§>]+\s+/g, ' ');  // Remove scattered symbols between words
     
     // Fix strikethrough text misreads (=115 should be -115 for odds)
     cleaned = cleaned.replace(/=(\d{3})/g, '-$1');
@@ -89,7 +97,22 @@ function cleanOCRText(text) {
     
     // Remove ALL icon prefixes at start of lines (team icons, bullets, etc.)
     cleaned = cleaned.replace(/^['"]?[®@©•o◉●○◯▪▫■□◆◇★☆►▶▸‣⁃∙∘⚬⦿⦾⊙⊚⊛⊜⊝⚫⚪🔴🔵🟢🟡🟠🟣⚽🏈🏀⛹️‍♂️\.]+\s*/gm, '');
-    cleaned = cleaned.replace(/^(ee|Co|Ca|SEN|Ces|BE\.|So|2\.|J|e|a|o|OO|>\s*|"Y\s*|IN|Pe|A)\s+/gm, '');
+    cleaned = cleaned.replace(/^(ee|Co|Ca|SEN|Ces|BE\.|So|2\.|J|e|a|o|OO|>\s*|"Y\s*|IN|Pe|A|BE)\s+/gm, '');
+    
+    // Remove standalone symbols at start of lines
+    cleaned = cleaned.replace(/^\s*[\$§+>¥]+\s*[:=]?\s*/gm, '');
+    
+    // Fix broken player names (BE \MMY -> JIMMY)
+    cleaned = cleaned.replace(/BE\s+\\MMY/g, 'JIMMY');
+    cleaned = cleaned.replace(/\\MMY/g, 'JIMMY');
+    
+    // Fix "¥ 10" pattern (should be "TO")
+    cleaned = cleaned.replace(/[¥§]\s*10\s+/g, 'TO ');
+    cleaned = cleaned.replace(/[¥§]\s+TO\s+/g, 'TO ');
+    
+    // Remove junk number patterns (like "7 ie")
+    cleaned = cleaned.replace(/^\s*\d+\s+ie\s*$/gm, '');
+    cleaned = cleaned.replace(/\s+\d+\s+ie\s*$/gm, '');
     
     // Fix garbage text patterns
     cleaned = cleaned.replace(/\[EFX¥e\]e|\[EFEReld\]|\[EFERYS\]|\[EFENELE\]/g, '$25.00');
