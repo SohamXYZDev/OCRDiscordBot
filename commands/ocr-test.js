@@ -209,19 +209,49 @@ async function downloadImage(url, filepath) {
 }
 
 /**
- * Preprocess image to improve OCR accuracy
+ * Preprocess image to improve OCR accuracy with dark mode detection
  */
 async function preprocessImage(imagePath) {
     const outputPath = imagePath.replace(/(\.[^.]+)$/, '_processed$1');
     
     try {
-        await sharp(imagePath)
-            .resize({ width: 2000, fit: 'inside', withoutEnlargement: false })
-            .greyscale()
-            .normalize()
-            .linear(1.2, -(128 * 1.2) + 128)
-            .sharpen({ sigma: 1.5 })
-            .toFile(outputPath);
+        // Detect if image is dark mode by sampling pixel brightness
+        const img = sharp(imagePath);
+        const { data, info } = await img.raw().toBuffer({ resolveWithObject: true });
+        
+        let totalBrightness = 0;
+        const sampleSize = 1000;
+        for (let i = 0; i < sampleSize; i++) {
+            const idx = Math.floor(Math.random() * data.length / info.channels) * info.channels;
+            const r = data[idx];
+            const g = data[idx + 1];
+            const b = data[idx + 2];
+            totalBrightness += (r + g + b) / 3;
+        }
+        const avgBrightness = totalBrightness / sampleSize;
+        const isDarkMode = avgBrightness < 100;
+        
+        console.log(`   Average brightness: ${avgBrightness.toFixed(1)} - ${isDarkMode ? 'Dark mode' : 'Light mode'} detected`);
+        
+        // Apply preprocessing based on mode
+        if (isDarkMode) {
+            // For dark mode: invert colors first, then enhance
+            await sharp(imagePath)
+                .resize({ width: 5000, fit: 'inside', withoutEnlargement: false })
+                .negate()  // Invert colors for dark backgrounds
+                .modulate({ brightness: 1.2, contrast: 1.3 })
+                .normalize()
+                .sharpen({ sigma: 1.5 })
+                .toFile(outputPath);
+        } else {
+            // For light mode: standard preprocessing
+            await sharp(imagePath)
+                .resize({ width: 4000, fit: 'inside', withoutEnlargement: false })
+                .normalize()
+                .linear(1.1, -(128 * 0.1))
+                .sharpen({ sigma: 1.2 })
+                .toFile(outputPath);
+        }
         
         return outputPath;
     } catch (error) {
