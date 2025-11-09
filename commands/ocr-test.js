@@ -16,8 +16,73 @@ const __dirname = dirname(__filename);
 function cleanOCRText(text) {
     let cleaned = text;
     
+    // Dark mode OCR cleaning (for inverted images)
+    // Remove leading junk characters that appear in dark mode OCR
+    cleaned = cleaned.replace(/^[ZT]+\s+/gm, '');
+    cleaned = cleaned.replace(/^[%~]+\s*/gm, '');
+    cleaned = cleaned.replace(/^[£\[\|]+\s*[=»]+\s*/gm, '');  // Remove avatar/icon artifacts
+    cleaned = cleaned.replace(/^\|\s+/gm, '');  // Remove pipe symbols at start of lines
+    
+    // Fix icon misreads in dark mode betting slips
+    cleaned = cleaned.replace(/[*]\s+-\s+[&¥®©]/g, ' - ');
+    cleaned = cleaned.replace(/\s+[*]\s+/g, ' ');
+    
+    // Remove "YN" artifacts (button UI elements)
+    cleaned = cleaned.replace(/^\s*\d*\s*YN\s*$/gm, '');
+    
+    // Clean up sportsbook name artifacts
+    cleaned = cleaned.replace(/^Lv\s+/gm, '');
+    cleaned = cleaned.replace(/^EB\s+/gm, '');
+    cleaned = cleaned.replace(/^by\s+of.*$/gm, '');
+    
+    // Fix common OCR errors with numbers
+    cleaned = cleaned.replace(/(\s)135(\s+[+-]\d+)/g, '$113.5$2');
+    
+    // Fix arrow misreads at end of lines
+    cleaned = cleaned.replace(/\s+El\s*$/gm, ' →');
+    cleaned = cleaned.replace(/\s+Ed\s*$/gm, ' →');
+    cleaned = cleaned.replace(/\s+>\s*$/gm, ' →');
+    
+    // Fix Saturday/day abbreviations with trailing junk
+    cleaned = cleaned.replace(/(Saturday|Sunday|Monday|Tuesday|Wednesday|Thursday|Friday)\s+[A-Z]{1,3}\s*$/gm, '$1');
+    
     // Remove "®" characters at the start of lines (including multiple quotes)
     cleaned = cleaned.replace(/^["']*®+\s*/gm, '');
+    
+    // Remove icon symbols at start of lines (team icons, betting icons, etc.)
+    cleaned = cleaned.replace(/^[&]+\s+/gm, '');
+    cleaned = cleaned.replace(/^X\s+/gm, '');  // Remove checkbox symbols
+    
+    // Fix strikethrough text misreads (=115 should be -115 for odds)
+    cleaned = cleaned.replace(/=(\d{3})/g, '-$1');
+    
+    // Remove info icon misreads in middle of text
+    cleaned = cleaned.replace(/\s+®\s+/g, ' ');
+    cleaned = cleaned.replace(/CASHOUT/g, 'CASH OUT');
+    cleaned = cleaned.replace(/\s+GO\)\s*/g, ' ');  // Remove (i) icon misread as GO)
+    
+    // Fix bullet points misread as asterisk
+    cleaned = cleaned.replace(/\s+\*\s+/g, ' • ');
+    cleaned = cleaned.replace(/\s+«\s+/g, ' • ');  // Fix guillemet bullets
+    cleaned = cleaned.replace(/\s+\+\s+(?=[A-Z])/g, ' • ');  // Fix + as bullet when before capital letter
+    
+    // Merge "PM" on separate line with previous time
+    cleaned = cleaned.replace(/(\d{1,2}:\d{2})\s*\n\s*PM/g, '$1 PM');
+    
+    // Fix SGP badge misreads
+    cleaned = cleaned.replace(/\[scp\]|SGP\]/gi, 'SGP');
+    
+    // Fix Same Game Parlay formatting
+    cleaned = cleaned.replace(/Same Game Parlay(?!™)/g, 'Same Game Parlay™');
+    cleaned = cleaned.replace(/Parlay["""]/g, 'Parlay™');
+    
+    // Remove line continuation artifacts
+    cleaned = cleaned.replace(/\s*A\\\s*$/gm, '');
+    cleaned = cleaned.replace(/\\\s*$/gm, '');
+    
+    // Fix multi-line bet descriptions that got split
+    cleaned = cleaned.replace(/Outside\s*\n\s*the Box/g, 'Outside the Box');
+    cleaned = cleaned.replace(/Target\s*\n\s*Outside/g, 'Target Outside');
     
     // Remove single "O" followed by space at the start of lines (often before player names)
     cleaned = cleaned.replace(/^O\s+/gm, '');
@@ -36,13 +101,14 @@ function cleanOCRText(text) {
     cleaned = cleaned.replace(/\(3\)/g, '🎟️');
     
     // CRITICAL: Fix A&M BEFORE converting & to emoji
+    // Fix A&M with any separator/garbage between A and M
     cleaned = cleaned.replace(/A[\s&💰🎟️💵®@©•o◉●]*M\b/g, 'A&M');
     cleaned = cleaned.replace(/A\s*&\s*M/g, 'A&M');
     
     // Now convert remaining & to emoji (that aren't part of A&M)
     cleaned = cleaned.replace(/&/g, '🎟️');
     
-    // Remove UI elements
+    // Remove UI elements that shouldn't be in betting data
     cleaned = cleaned.replace(/D?\s*Follow bet on Lock Screen\s*C?/gi, '');
     cleaned = cleaned.replace(/\|\s*Placed:/g, '\nPlaced:');
     
@@ -79,27 +145,27 @@ function cleanOCRText(text) {
     // Fix team @ team spacing
     cleaned = cleaned.replace(/([A-Z][a-z]+)@([A-Z])/g, '$1 @ $2');
     
-    // Fix negative numbers
+    // Fix negative numbers with double dash and missing minus signs
     cleaned = cleaned.replace(/--(-?\d+)/g, '-$1');
     cleaned = cleaned.replace(/\b247\b/g, '-247');
     cleaned = cleaned.replace(/\b473\b/g, '-473');
     cleaned = cleaned.replace(/\b148\b/g, '-148');
     
-    // Remove weird prefix artifacts
+    // Remove weird prefix artifacts from middle of text
     cleaned = cleaned.replace(/\s+®\s+/g, ' ');
     cleaned = cleaned.replace(/\.\s+®\s+/g, '. ');
     cleaned = cleaned.replace(/\s+"Y\s+/g, ' ');
     cleaned = cleaned.replace(/"Y\s+MONEYLINE/g, 'MONEYLINE');
-    cleaned = cleaned.replace(/\s+"Y$/gm, '');
-    cleaned = cleaned.replace(/-\d{3,4}\s+"Y$/gm, (match) => match.replace(/\s+"Y$/, ''));
+    cleaned = cleaned.replace(/\s+"Y$/gm, '');  // Remove "Y at end of lines
+    cleaned = cleaned.replace(/-\d{3,4}\s+"Y$/gm, (match) => match.replace(/\s+"Y$/, ''));  // Remove "Y after odds
     
-    // Final aggressive A&M fix
+    // Final aggressive A&M fix - catch any remaining variations
     cleaned = cleaned.replace(/A[\s💰🎟️💵®@©•o◉●]+M\b/g, 'A&M');
     
     // Clean up multiple spaces but PRESERVE line breaks
-    cleaned = cleaned.replace(/ +/g, ' ');
-    cleaned = cleaned.replace(/\n\s+/g, '\n');
-    cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+    cleaned = cleaned.replace(/ +/g, ' ');  // Multiple spaces to single space
+    cleaned = cleaned.replace(/\n\s+/g, '\n');  // Remove leading spaces on new lines
+    cleaned = cleaned.replace(/\n{3,}/g, '\n\n');  // Max 2 consecutive newlines
     
     // Remove standalone "Y lines
     cleaned = cleaned.replace(/\n"Y\n/g, '\n');
