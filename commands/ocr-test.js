@@ -725,93 +725,44 @@ export default {
             // Parse data
             const result = parseExtractedData(ocrData);
             
-            // Structure the betting slip
-            const structuredData = structureBettingSlip(result.cleanedText);
-            const data = structuredData.structured;
-            
             // Create embed
             const embed = new EmbedBuilder()
                 .setColor(0x00FF00)
                 .setTitle('🎰 Betting Slip OCR Results')
                 .setTimestamp();
             
-            // Add Game Info field
-            if (data.gameInfo) {
+            // Split cleaned text into chunks if too long (Discord field limit is 1024)
+            const cleanedText = result.cleanedText;
+            const maxLength = 1024;
+            
+            if (cleanedText.length <= maxLength) {
                 embed.addFields({
-                    name: '🏈 Game Info',
-                    value: data.gameInfo,
+                    name: '📄 Extracted Text',
+                    value: cleanedText || 'No text extracted',
                     inline: false
                 });
-            }
-            
-            // Add Odds field
-            if (data.odds) {
-                embed.addFields({
-                    name: '📊 Odds',
-                    value: data.odds,
-                    inline: true
-                });
-            }
-            
-            // Add Slip Info field
-            if (data.slipInfo) {
-                embed.addFields({
-                    name: '🎟️ Slip Info',
-                    value: data.slipInfo,
-                    inline: false
-                });
-            }
-            
-            // Add Individual Legs field
-            if (data.legs.length > 0) {
-                const legsText = data.legs.join('\n');
+            } else {
+                // Split into multiple fields
+                const chunks = [];
+                let currentChunk = '';
+                const lines = cleanedText.split('\n');
                 
-                // Discord field value limit is 1024 characters
-                if (legsText.length > 1024) {
-                    // Split into multiple fields if too long
-                    const midpoint = Math.ceil(data.legs.length / 2);
-                    const firstHalf = data.legs.slice(0, midpoint).join('\n');
-                    const secondHalf = data.legs.slice(midpoint).join('\n');
-                    
-                    embed.addFields({
-                        name: '📋 Individual Legs (Part 1)',
-                        value: firstHalf,
-                        inline: false
-                    });
-                    
-                    embed.addFields({
-                        name: '📋 Individual Legs (Part 2)',
-                        value: secondHalf,
-                        inline: false
-                    });
-                } else {
-                    embed.addFields({
-                        name: '📋 Individual Legs',
-                        value: legsText,
-                        inline: false
-                    });
+                for (const line of lines) {
+                    if ((currentChunk + '\n' + line).length > maxLength) {
+                        chunks.push(currentChunk);
+                        currentChunk = line;
+                    } else {
+                        currentChunk += (currentChunk ? '\n' : '') + line;
+                    }
                 }
-            }
-            
-            // Add Wager/Payout field
-            if (data.wager || data.payout) {
-                const wagerPayoutText = [];
-                if (data.wager) wagerPayoutText.push(`💵 Total Wager: **${data.wager}**`);
-                if (data.payout) wagerPayoutText.push(`💰 Total Payout: **${data.payout}**`);
+                if (currentChunk) chunks.push(currentChunk);
                 
-                embed.addFields({
-                    name: '💸 Wager & Payout',
-                    value: wagerPayoutText.join('\n'),
-                    inline: false
-                });
-            }
-            
-            // Add Extra Info field if present
-            if (data.extra.length > 0) {
-                embed.addFields({
-                    name: 'ℹ️ Additional Info',
-                    value: data.extra.join('\n'),
-                    inline: false
+                chunks.forEach((chunk, index) => {
+                    embed.addFields({
+                        name: `📄 Extracted Text (Part ${index + 1})`,
+                        value: chunk,
+                        inline: false
+                    });
                 });
             }
             
