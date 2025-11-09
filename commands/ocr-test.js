@@ -245,7 +245,7 @@ function structureBettingSlip(text) {
         }
         
         // Detect slip type and token
-        if (/Same Game Parlay|Parlay|Straight Bet/i.test(line)) {
+        if (/Same Game Parlay|Parlay|Straight Bet|\d+\s+leg\s+parlay|\d+\s+Pick\s+Parlay/i.test(line)) {
             let slipParts = [line];
             if (/NO SWEAT TOKEN/i.test(nextLine)) {
                 slipParts.push(lines[i + 1]);
@@ -293,20 +293,220 @@ function structureBettingSlip(text) {
         
         // Parse individual legs (player props)
         if (currentSection === 'legs') {
-            // Check if this looks like a bet leg
-            if (/Over|Under|OVER|UNDER|\+|-\d+/i.test(line) || /MONEYLINE|SPREAD|TOUCHDOWN|RECEPTIONS|PASSING|RUSHING|RECEIVING/i.test(line)) {
-                // Try to parse player name and bet type
-                let betLine = line;
+            // Skip the summary line that lists all bets separated by commas
+            // Example: "Dallas Goedert Any Time Touchdown Scorer, George Kittle Any Time A"
+            // Also skip lines that start with bet type without player name
+            if ((line.includes(',') && /Any Time.*,.*Any Time/i.test(line)) || 
+                /^(Touchdown Scorer|Any Time)/i.test(line) ||
+                (line.includes(',') && line.includes('by') && line.length > 80)) {
+                continue;
+            }
+            
+            // Handle "20+" format (player props with + suffix)
+            // Pattern: "20+" on one line, "Player Name Stat Type" on next line
+            const plusMatch = line.match(/^(\d+)\+$/);
+            if (plusMatch) {
+                const value = plusMatch[1];
                 
-                // Check if next line is a subtitle (like "RECEIVING YDS")
-                if (i < lines.length - 1 && /^[A-Z\s]+(YDS|TDS|RECEPTIONS|TOUCHDOWNS|POINTS|ASSISTS)$/i.test(nextLine)) {
-                    betLine += ' ' + nextLine;
-                    i++;
+                // Next line should have player name and stat type
+                if (i < lines.length - 1) {
+                    const playerStatLine = lines[i + 1];
+                    // Pattern: "Player Name StatType" or "Player Name Stat Type"
+                    const playerStatMatch = playerStatLine.match(/^(.+?)\s+(Points|Rebounds|Assists|Receptions|Yards|Touchdowns|Steals|Blocks)$/i);
+                    
+                    if (playerStatMatch) {
+                        const playerName = playerStatMatch[1].trim();
+                        const statType = playerStatMatch[2].trim();
+                        const formattedLeg = `${playerName} - Over ${value}.5 ${statType}`;
+                        structured.legs.push(formattedLeg);
+                        i++; // Skip the next line since we used it
+                        continue;
+                    }
+                }
+            }
+            
+            // Handle fighter "by" method bets (e.g., "Valter Walker by KO/TKO or Submission")
+            const byMatch = line.match(/^(.+?)\s+by\s*(.*)$/i);
+            if (byMatch) {
+                const fighter = byMatch[1].trim();
+                let method = byMatch[2].trim();
+                let odds = '';
+                let skipLines = 0;
+                
+                // Look ahead for odds and method completion
+                for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
+                    const checkLine = lines[j];
+                    
+                    // Skip garbage lines like "cei -147" - extract odds only
+                    if (/^[a-z]{2,4}\s+-?\d{3,4}$/.test(checkLine)) {
+                        const match = checkLine.match(/-?\d{3,4}$/);
+                        if (match && !odds) {
+                            odds = match[0];
+                        }
+                        skipLines++;
+                        continue;
+                    }
+                    
+                    // Found standalone odds
+                    if (/^-?\d{3,4}$/.test(checkLine) && !odds) {
+                        odds = checkLine;
+                        skipLines++;
+                        continue;
+                    }
+                    
+                    // Found method completion line (not descriptor/matchup/date)
+                    if (!/^[A-Z\s()]+$/.test(checkLine) && 
+                        !/v\s+/.test(checkLine) && 
+                        !/^\d{1,2}:\d{2}/.test(checkLine) &&
+                        !/^(DOUBLE CHANCE|MONEYLINE|ALT\.)/.test(checkLine)) {
+                        // This is part of the method
+                        if (method && !method.endsWith('or') && !method.endsWith('and')) {
+                            // Method already complete
+                            break;
+                        }
+                        method += ' ' + checkLine.trim();
+                        skipLines++;
+                        continue;
+                    }
+                    
+                    // Stop at descriptor or matchup lines
+                    break;
                 }
                 
-                // Format the leg
-                legCounter++;
-                structured.legs.push(`${legCounter}. ${betLine}`);
+                method = method.replace(/\.\.\.$/, '').replace(/\s+/g, ' ').trim();
+                
+                // Only add if we have a complete bet
+                if (method.length > 2) {
+                    const formattedLeg = `${fighter} by ${method} ${odds}`.trim();
+                    structured.legs.push(formattedLeg);
+                    i += skipLines;
+                    continue;
+                }
+            }
+            
+            // Handle Yes/No bets (e.g., "No" for "Will the fight go the distance?")
+            if (/^(Yes|No)\s+-?\d{3,4}$/.test(line)) {
+                structured.legs.push(line);
+                continue;
+            }
+            
+            // Handle "Fighter Round X, Y, or Z -odds"
+            const roundMatch = line.match(/^(.+?)\s+Round\s+(.+?)\s+-?\d{3,4}$/i);
+            if (roundMatch) {
+                structured.legs.push(line);
+                continue;
+            }
+            
+            // Handle fighter moneyline: "Fighter Name 137" (missing minus sign)
+            const fighterNoSignMatch = line.match(/^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+(\d{3,4})$/);
+            if (fighterNoSignMatch && i < lines.length - 1 && /^MONEYLINE$/i.test(nextLine)) {
+                const fighter = fighterNoSignMatch[1].trim();
+                const odds = '-' + fighterNoSignMatch[2];
+                structured.legs.push(`${fighter} ${odds}`);
+                i++; // Skip MONEYLINE
+                continue;
+            }
+            
+            // Look for lines with Over/Under followed by a number
+            const betMatch = line.match(/^(.+?)\s+(Over|Under)\s+(\d+\.?\d*)\s*(.*)$/i);
+            
+            if (betMatch) {
+                const playerName = betMatch[1].trim();
+                const overUnder = betMatch[2];
+                const value = betMatch[3];
+                let betType = betMatch[4].trim();
+                
+                // If bet type is on next line (all caps like "RECEIVING YDS")
+                if ((!betType || betType.length < 5) && i < lines.length - 1) {
+                    const nextUpper = nextLine.toUpperCase();
+                    if (nextUpper === nextLine && /YDS|TDS|RECEPTIONS|TOUCHDOWNS|POINTS|ASSISTS|PASSING|RUSHING|RECEIVING/i.test(nextLine)) {
+                        betType = nextLine.replace(/-/g, '').trim();
+                        i++; // Skip the next line since we used it
+                    }
+                }
+                
+                // Clean up bet type
+                betType = betType
+                    .replace(/^-\s*/, '')
+                    .replace(/\s*-\s*$/, '')
+                    .trim();
+                
+                // Build formatted leg
+                const formattedLeg = `${playerName} - ${overUnder} ${value} ${betType}`.trim();
+                structured.legs.push(formattedLeg);
+                continue;
+            }
+            
+            // Handle player name followed by odds on same line (e.g., "Dallas Goedert +175")
+            const playerOddsMatch = line.match(/^(.+?)\s+([+-]\d{3,4})$/);
+            if (playerOddsMatch) {
+                let playerName = playerOddsMatch[1].trim();
+                const odds = playerOddsMatch[2];
+                
+                // Clean player name from OCR artifacts
+                playerName = playerName.replace(/^[)\(©T\-\s]+/, ''); // Remove prefixes like ") ©" or "T-"
+                playerName = playerName.trim();
+                
+                // Check if next line is the bet type descriptor
+                if (i < lines.length - 1 && /^ANY TIME TOUCHDOWN SCORER$/i.test(nextLine)) {
+                    const formattedLeg = `${playerName} - Any Time Touchdown Scorer ${odds}`;
+                    structured.legs.push(formattedLeg);
+                    i++; // Skip the descriptor line
+                    
+                    // Skip game info line if it follows
+                    if (i < lines.length - 1 && lines[i + 1].includes('@')) {
+                        i++;
+                    }
+                    continue;
+                }
+            }
+            
+            // Handle Any Time Touchdown Scorer and similar bets (without odds on same line)
+            const touchdownMatch = line.match(/^(.+?)\s+(Any Time Touchdown Scorer|Anytime Touchdown Scorer|First Touchdown Scorer|Last Touchdown Scorer)/i);
+            if (touchdownMatch) {
+                const playerName = touchdownMatch[1].trim();
+                const betType = touchdownMatch[2].trim();
+                
+                // Check if next line has odds like "+175"
+                let odds = '';
+                if (i < lines.length - 1 && /^[+-]\d{3,4}$/.test(nextLine)) {
+                    odds = ` ${nextLine}`;
+                    i++; // Skip the odds line
+                    
+                    // Also skip the ALL CAPS descriptor if it follows
+                    if (i < lines.length - 1 && /^ANY TIME TOUCHDOWN SCORER$/i.test(lines[i + 1])) {
+                        i++;
+                    }
+                }
+                
+                const formattedLeg = `${playerName} - ${betType}${odds}`.trim();
+                structured.legs.push(formattedLeg);
+                continue;
+            }
+            
+            // Handle standalone odds with bet type descriptor (skip if already processed)
+            if (/^[+-]\d{3,4}$/.test(line)) {
+                continue; // Already handled above
+            }
+            
+            // Skip ALL CAPS descriptors if they appear standalone
+            if (/^ANY TIME TOUCHDOWN SCORER$/i.test(line)) {
+                continue; // Already handled above
+            }
+            
+            // Skip game info lines in the legs section
+            if (line.includes('@') && /\d{1,2}:\d{2}[AP]M/.test(line)) {
+                continue;
+            }
+            
+            // Skip lines that start with symbols like ") ©" or "T-"
+            if (/^[)\(©T\-]+\s+/.test(line)) {
+                continue;
+            }
+            
+            // Handle other bet types (Moneyline, Spread, etc.)
+            if (/MONEYLINE|SPREAD/i.test(line) && !/TOUCHDOWN/i.test(line)) {
+                structured.legs.push(line);
                 continue;
             }
         }
@@ -342,8 +542,8 @@ function structureBettingSlip(text) {
         output.push('Individual Legs');
         structured.legs.forEach(leg => {
             output.push(leg);
-            output.push(''); // Add blank line after each leg
         });
+        output.push(''); // Single blank line after all legs
     }
     
     if (structured.wager || structured.payout) {
@@ -468,14 +668,14 @@ export default {
             
             // Add Individual Legs field
             if (data.legs.length > 0) {
-                const legsText = data.legs.join('\n\n');
+                const legsText = data.legs.join('\n');
                 
                 // Discord field value limit is 1024 characters
                 if (legsText.length > 1024) {
                     // Split into multiple fields if too long
                     const midpoint = Math.ceil(data.legs.length / 2);
-                    const firstHalf = data.legs.slice(0, midpoint).join('\n\n');
-                    const secondHalf = data.legs.slice(midpoint).join('\n\n');
+                    const firstHalf = data.legs.slice(0, midpoint).join('\n');
+                    const secondHalf = data.legs.slice(midpoint).join('\n');
                     
                     embed.addFields({
                         name: '📋 Individual Legs (Part 1)',

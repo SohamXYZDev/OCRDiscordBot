@@ -1,0 +1,152 @@
+{
+  "downloadDate": "2025-11-08T11:50:37.808Z",
+  "channelId": "1433575427175092314",
+  "totalImages": 29,
+  "images": [
+    {
+      "number": 1,
+      "filename": "test_1.png",
+      "filepath": "images\\batch_test\\test_1.png"
+    },
+    {
+      "number": 2,
+      "filename": "test_2.png",
+      "filepath": "images\\batch_test\\test_2.png"
+    },
+    {
+      "number": 3,
+      "filename": "test_3.png",
+      "filepath": "images\\batch_test\\test_3.png"
+    },
+    {
+      "number": 4,
+      "filename": "test_4.png",
+      "filepath": "images\\batch_test\\test_4.png"
+    },
+    {
+      "number": 5,
+      "filename": "test_5.png",
+      "filepath": "images\\batch_test\\test_5.png"
+    },
+    {
+      "number": 6,
+      "filename": "test_6.png",
+      "filepath": "images\\batch_test\\test_6.png"
+    },
+    {
+      "number": 7,
+      "filename": "test_7.png",
+      "filepath": "images\\batch_test\\test_7.png"
+    },
+    {
+      "number": 8,
+      "filename": "test_8.png",
+      "filepath": "images\\batch_test\\test_8.png"
+    },
+    {
+      "number": 9,
+      "filename": "test_9.png",
+      "filepath": "images\\batch_test\\test_9.png"
+    },
+    {
+      "number": 10,
+      "filename": "test_10.png",
+      "filepath": "images\\batch_test\\test_10.png"
+    },
+    {
+      "number": 11,
+      "filename": "test_11.png",
+      "filepath": "images\\batch_test\\test_11.png"
+    },
+    {
+      "number": 12,
+      "filename": "test_12.png",
+      "filepath": "images\\batch_test\\test_12.png"
+    },
+    {
+      "number": 13,
+      "filename": "test_13.png",
+      "filepath": "images\\batch_test\\test_13.png"
+    },
+    {
+      "number": 14,
+      "filename": "test_14.png",
+      "filepath": "images\\batch_test\\test_14.png"
+    },
+    {
+      "number": 15,
+      "filename": "test_15.png",
+      "filepath": "images\\batch_test\\test_15.png"
+    },
+    {
+      "number": 16,
+      "filename": "test_16.png",
+      "filepath": "images\\batch_test\\test_16.png"
+    },
+    {
+      "number": 17,
+      "filename": "test_17.png",
+      "filepath": "images\\batch_test\\test_17.png"
+    },
+    {
+      "number": 18,
+      "filename": "test_18.png",
+      "filepath": "images\\batch_test\\test_18.png"
+    },
+    {
+      "number": 19,
+      "filename": "test_19.png",
+      "filepath": "images\\batch_test\\test_19.png"
+    },
+    {
+      "number": 20,
+      "filename": "test_20.png",
+      "filepath": "images\\batch_test\\test_20.png"
+    },
+    {
+      "number": 21,
+      "filename": "test_21.png",
+      "filepath": "images\\batch_test\\test_21.png"
+    },
+    {
+      "number": 22,
+      "filename": "test_22.png",
+      "filepath": "images\\batch_test\\test_22.png"
+    },
+    {
+      "number": 23,
+      "filename": "test_23.png",
+      "filepath": "images\\batch_test\\test_23.png"
+    },
+    {
+      "number": 24,
+      "filename": "test_24.png",
+      "filepath": "images\\batch_test\\test_24.png"
+    },
+    {
+      "number": 25,
+      "filename": "test_25.png",
+      "filepath": "images\\batch_test\\test_25.png"
+    },
+    {
+      "number": 26,
+      "filename": "test_26.png",
+      "filepath": "images\\batch_test\\test_26.png"
+    },
+    {
+      "number": 27,
+      "filename": "test_27.png",
+      "filepath": "images\\batch_test\\test_27.png"
+    },
+    {
+      "number": 28,
+      "filename": "test_28.png",
+      "filepath": "images\\batch_test\\test_28.png"
+    },
+    {
+      "number": 29,
+      "filename": "test_29.png",
+      "filepath": "images\\batch_test\\test_29.png"
+    }
+  ]
+}
