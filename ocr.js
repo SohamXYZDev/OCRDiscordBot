@@ -405,15 +405,16 @@ function structureBettingSlip(text) {
             continue;
         }
         
-        // Detect slip type and token
+        // Detect slip type and token - but don't save useless info
         if (/Same Game Parlay|Parlay|Straight Bet|\d+\s+leg\s+parlay|\d+\s+Pick\s+Parlay/i.test(line)) {
-            let slipParts = [line];
-            if (/NO SWEAT TOKEN/i.test(nextLine)) {
-                slipParts.push(lines[i + 1]);
-                i++;
-            }
-            structured.slipInfo = slipParts.join(' | ');
+            // Skip lines with "Same Game Parlay", "NO SWEAT TOKEN", "Includes:", etc.
+            // These are just UI elements, not actual bet info
             currentSection = 'legs';
+            continue;
+        }
+        
+        // Skip useless UI text and labels
+        if (/NO SWEAT TOKEN|Includes:|Token Applied|SGP|Same Game Parlay™|SAME GAME PARLAY|Parlay™|Bet Placed|CASH OUT|CASHOUT|Follow bet|Lock Screen|Bet Type:|Placed:|Transaction Total:|Pass through|Player Shots on Target|Player Receptions|Player Receiving|Player Rushing|Player Passing|Receptions|Receiving Yds|Rushing Yds|Passing Yds/i.test(line)) {
             continue;
         }
         
@@ -678,46 +679,32 @@ function structureBettingSlip(text) {
         }
     }
     
-    // Build formatted output
+    // Build formatted output - clean and minimal
     let output = [];
     
     if (structured.gameInfo) {
-        output.push('Game Info');
         output.push(structured.gameInfo);
         output.push('');
     }
     
     if (structured.odds) {
-        output.push('Odds');
         output.push(structured.odds);
         output.push('');
     }
     
-    if (structured.slipInfo) {
-        output.push('Slip Info');
-        output.push(structured.slipInfo);
-        output.push('');
-    }
-    
+    // Each leg on its own line
     if (structured.legs.length > 0) {
-        output.push('Individual Legs');
         structured.legs.forEach(leg => {
             output.push(leg);
         });
-        output.push(''); // Single blank line after all legs
+        output.push('');
     }
     
     if (structured.wager || structured.payout) {
         const wagePay = [];
-        if (structured.wager) wagePay.push(`Total Wager: ${structured.wager}`);
-        if (structured.payout) wagePay.push(`Total Payout: ${structured.payout}`);
+        if (structured.wager) wagePay.push(`Wager: ${structured.wager}`);
+        if (structured.payout) wagePay.push(`Payout: ${structured.payout}`);
         output.push(wagePay.join(' | '));
-        output.push('');
-    }
-    
-    if (structured.extra.length > 0) {
-        output.push('Additional Info');
-        output.push(...structured.extra);
     }
     
     // Return both structured object and formatted text
